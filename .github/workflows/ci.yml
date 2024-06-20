@@ -13,9 +13,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: Homebrew/actions/setup-homebrew@master
       - run: brew install clang-format
-      - run: make
-      - run: make check
-      - run: make unit-test
+      - run: make CC=clang
+      - run: make check CC=clang
+      - run: make unit-test CC=clang
 
   actionlint:
     runs-on: ubuntu-latest
