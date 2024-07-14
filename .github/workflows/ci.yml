@@ -12,15 +12,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: Homebrew/actions/setup-homebrew@master
+      - uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r26d
+          link-to-sdk: true
       - run: brew install clang-format
-      - run: make CC=clang
-      - run: make check CC=clang
-      - run: make unit-test CC=clang
+      - run: make CC="${ANDROID_NDK_HOME}"/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+      - run: make check CLANG_TIDY="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang-tidy --extra-arg=--target=aarch64-linux-android29"
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+      - run: make unit-test CC=clang HOST_BUILD=1
 
   actionlint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4 
+      - uses: actions/checkout@v4
       - name: Download actionlint
         id: get_actionlint
         run: bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)

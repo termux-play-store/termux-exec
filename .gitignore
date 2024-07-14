@@ -6,3 +6,4 @@
 *.deb
 test-binary
 tests/fexecve
+tests/system-uname
