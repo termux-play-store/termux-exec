@@ -350,7 +350,9 @@ __attribute__((visibility("default"))) int execve(const char *executable_path, c
   char executable_path_resolved_buffer[PATH_MAX];
   char const *executable_path_resolved = realpath(executable_path, executable_path_resolved_buffer);
   char const *path_to_use = executable_path_resolved ? executable_path_resolved : executable_path;
-  bool wrap_in_linker = (strstr(path_to_use, TERMUX_BASE_DIR) == path_to_use);
+  bool wrap_in_linker = (strstr(path_to_use, TERMUX_BASE_DIR) == path_to_use)
+    // /system/bin/sh is fine, it only uses libc++, libc, and libdl.
+    || (strcmp(path_to_use, "/system/bin/sh") == 0);
 
   // Avoid interfering with Android /system software by removing
   // LD_PRELOAD and LD_LIBRARY_PATH from env if executing something
