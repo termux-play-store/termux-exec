@@ -1,7 +1,7 @@
 CC ?= clang
 TERMUX_BASE_DIR ?= /data/data/com.termux/files
 CFLAGS += -Wall -Wextra -Werror -Wshadow -fvisibility=hidden -std=c17
-C_SOURCE := src/termux-exec.c src/exec-variants.c
+C_SOURCE := src/termux-exec.c src/exec-variants.c src/termux-readlink.c
 CLANG_FORMAT := clang-format --sort-includes --style="{ColumnLimit: 120}" $(C_SOURCE) tests/fexecve.c tests/system-uname.c tests/print-argv0.c tests/popen.c
 CLANG_TIDY ?= clang-tidy
 
