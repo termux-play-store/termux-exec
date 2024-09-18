@@ -27,6 +27,9 @@ tests/popen: tests/popen.c
 tests/system-uname: tests/system-uname.c
 	$(CC) $(CFLAGS) -DTERMUX_BASE_DIR=\"$(TERMUX_BASE_DIR)\" $< -o $@
 
+tests/readlink-proc-self-exe: tests/readlink-proc-self-exe.c
+	$(CC) $(CFLAGS) -DTERMUX_BASE_DIR=\"$(TERMUX_BASE_DIR)\" $< -o $@
+
 $(TERMUX_BASE_DIR)/usr/bin/termux-exec-test-print-argv0: tests/print-argv0.c
 	$(CC) $(CFLAGS) $< -o $@
 
@@ -43,7 +46,7 @@ on-device-tests:
 	make clean
 	ASAN_OPTIONS=symbolize=0,detect_leaks=0 make on-device-tests-internal
 
-on-device-tests-internal: libtermux-exec.so tests/fexecve tests/popen tests/system-uname $(TERMUX_BASE_DIR)/usr/bin/termux-exec-test-print-argv0
+on-device-tests-internal: libtermux-exec.so tests/fexecve tests/popen tests/system-uname tests/readlink-proc-self-exe $(TERMUX_BASE_DIR)/usr/bin/termux-exec-test-print-argv0
 	@LD_PRELOAD=${CURDIR}/libtermux-exec.so ./run-tests.sh
 
 format:

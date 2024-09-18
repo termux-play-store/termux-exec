@@ -10,6 +10,11 @@ __attribute__((visibility("default"))) ssize_t readlink(const char *restrict pat
   if (strcmp(pathname, "/proc/self/exe") == 0) {
     const char *termux_self_exe = getenv("TERMUX_EXEC__PROC_SELF_EXE");
     if (termux_self_exe) {
+      char resolved_path_buf[PATH_MAX];
+      char *resolved_path = realpath(termux_self_exe, resolved_path_buf);
+      if (resolved_path) {
+        termux_self_exe = resolved_path_buf;
+      }
       size_t termux_self_exe_len = strlen(termux_self_exe);
       size_t bytes_to_copy = (termux_self_exe_len < bufsiz) ? termux_self_exe_len : bufsiz;
       memcpy(buf, termux_self_exe, bytes_to_copy);

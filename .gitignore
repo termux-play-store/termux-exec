@@ -8,3 +8,4 @@ test-binary
 tests/fexecve
 tests/popen
 tests/system-uname
+tests/readlink-proc-self-exe
