@@ -50,7 +50,7 @@ on-device-tests-internal: libtermux-exec.so tests/fexecve tests/popen tests/syst
 	@LD_PRELOAD=${CURDIR}/libtermux-exec.so ./run-tests.sh
 
 format:
-	$(CLANG_FORMAT) -i $(C_SOURCE)
+	$(CLANG_FORMAT) -i $(C_SOURCE) tests/*.c
 
 check:
 	$(CLANG_FORMAT) --dry-run $(C_SOURCE)
