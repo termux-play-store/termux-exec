@@ -1,10 +1,10 @@
 CC ?= clang
 TERMUX_BASE_DIR ?= /data/data/com.termux/files
 CFLAGS += -Wall -Wextra -Werror -Wshadow -fvisibility=hidden -std=c23 -D__USE_GNU
-C_SOURCE := src/termux-exec.c src/exec-variants.c src/termux-readlink.c
+C_SOURCE := src/termux-exec.c src/exec-variants.c src/termux-readlink.c src/termux-realpath.c
 CLANG_FORMAT := clang-format --sort-includes --style="{ColumnLimit: 120}" $(C_SOURCE) tests/fexecve.c tests/system-uname.c tests/print-argv0.c tests/popen.c
 CLANG_TIDY ?= clang-tidy
-TEST_BINARIES = tests/execl tests/exec-directory tests/fexecve tests/popen tests/system-uname tests/readlink-proc-self-exe
+TEST_BINARIES = tests/execl tests/exec-directory tests/fexecve tests/popen tests/system-uname tests/readlink-proc-self-exe tests/realpath
 
 ifeq ($(SANITIZE),1)
   CFLAGS += -O1 -g -fsanitize=address -fno-omit-frame-pointer
@@ -37,6 +37,9 @@ tests/system-uname: tests/system-uname.c
 	$(CC) $(CFLAGS) -DTERMUX_BASE_DIR=\"$(TERMUX_BASE_DIR)\" $< -o $@
 
 tests/readlink-proc-self-exe: tests/readlink-proc-self-exe.c
+	$(CC) $(CFLAGS) -DTERMUX_BASE_DIR=\"$(TERMUX_BASE_DIR)\" $< -o $@
+
+tests/realpath: tests/realpath.c
 	$(CC) $(CFLAGS) -DTERMUX_BASE_DIR=\"$(TERMUX_BASE_DIR)\" $< -o $@
 
 $(TERMUX_BASE_DIR)/usr/bin/termux-exec-test-print-argv0: tests/print-argv0.c
