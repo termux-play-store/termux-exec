@@ -231,6 +231,13 @@ CLANG_TIDY ?= clang-tidy
 .NOTPARALLEL:
 
 all: | pre-build build-libtermux-exec_c build-libtermux-exec-ld-preload
+	@printf "\ntermux-exec-package: %s\n" "Building tests/*"
+	@mkdir -p $(TESTS_BUILD_OUTPUT_DIR)
+	find tests -maxdepth 1 -type f -name "*.in" -print0 | xargs -0 -n1 sh -c \
+		'output_file="$(TESTS_BUILD_OUTPUT_DIR)/$$(printf "%s" "$$0" | sed -e "s|^tests/||" -e "s/\.in$$//")" && mkdir -p "$$(dirname "$$output_file")" && sed $(TERMUX__CONSTANTS__SED_ARGS) "$$0" > "$$output_file"'
+	find $(TESTS_BUILD_OUTPUT_DIR) -maxdepth 1 -type f -exec chmod 700 "{}" \;
+
+
 	@printf "\ntermux-exec-package: %s\n" "Building packaging/debian/*"
 	@mkdir -p $(DEBIAN_PACKAGING_BUILD_OUTPUT_DIR)
 	find packaging/debian -mindepth 1 -maxdepth 1 -type f -name "*.in" -exec sh -c \
@@ -276,6 +283,76 @@ build-libtermux-exec_c:
 
 	@printf "\ntermux-exec-package: %s\n" "Building lib/libtermux-exec_c.a"
 	$(AR) rcs $(LIB_BUILD_OUTPUT_DIR)/libtermux-exec_c.a $(LIBTERMUX_EXEC__C__OBJECT_FILES)
+
+
+
+	@printf "\ntermux-exec-package: %s\n" "Building lib/termux-exec_c/tests/*"
+	@mkdir -p $(LIBTERMUX_EXEC__C__TESTS_BUILD_OUTPUT_DIR)
+
+
+	@printf "\ntermux-exec-package: %s\n" "Building lib/termux-exec_c/tests/libtermux-exec_c_tests"
+	$(call replace-termux-constants,lib/termux-exec_c/tests/libtermux-exec_c_tests,$(LIBTERMUX_EXEC__C__TESTS_BUILD_OUTPUT_DIR))
+	chmod 700 $(LIBTERMUX_EXEC__C__TESTS_BUILD_OUTPUT_DIR)/libtermux-exec_c_tests
+
+
+	@printf "\ntermux-exec-package: %s\n" "Building lib/termux-exec_c/tests/bin/libtermux-exec_c_unit-binary-tests"
+	@mkdir -p $(LIBTERMUX_EXEC__C__TESTS_BUILD_OUTPUT_DIR)/bin
+
+	@# `nm --demangle --defined-only --extern-only /home/builder/.termux-build/termux-exec/src/build/output/usr/libexec/installed-tests/termux-exec/lib/termux-exec_c/bin/libtermux-exec_c_unit-binary-tests-fsanitize`
+	$(TERMUX_EXEC_EXECUTABLE__C__BUILD_COMMAND) -O0 -g \
+		$(FSANTIZE_FLAGS) \
+		-o $(LIBTERMUX_EXEC__C__TESTS_BUILD_OUTPUT_DIR)/bin/libtermux-exec_c_unit-binary-tests-fsanitize \
+		lib/termux-exec_c/tests/src/libtermux-exec_c_unit-binary-tests.c \
+		$(TERMUX_EXEC_EXECUTABLE__C__POST_LDFLAGS)
+
+	@# `nm --demangle --defined-only --extern-only /home/builder/.termux-build/termux-exec/src/build/output/usr/libexec/installed-tests/termux-exec/lib/termux-exec_c/bin/libtermux-exec_c_unit-binary-tests-nofsanitize`
+	$(TERMUX_EXEC_EXECUTABLE__C__BUILD_COMMAND) -O0 -g \
+		-o $(LIBTERMUX_EXEC__C__TESTS_BUILD_OUTPUT_DIR)/bin/libtermux-exec_c_unit-binary-tests-nofsanitize \
+		lib/termux-exec_c/tests/src/libtermux-exec_c_unit-binary-tests.c \
+		$(TERMUX_EXEC_EXECUTABLE__C__POST_LDFLAGS)
+
+
+	@printf "\ntermux-exec-package: %s\n" "Building lib/termux-exec_c/tests/bin/libtermux-exec_c_runtime-binary-tests$(TERMUX_EXEC_PKG__TESTS__API_LEVEL)"
+	@mkdir -p $(LIBTERMUX_EXEC__C__TESTS_BUILD_OUTPUT_DIR)/bin
+
+	$(TERMUX_EXEC_EXECUTABLE__C__BUILD_COMMAND) -O0 -g \
+		$(FSANTIZE_FLAGS) \
+		-o $(LIBTERMUX_EXEC__C__TESTS_BUILD_OUTPUT_DIR)/bin/libtermux-exec_c_runtime-binary-tests-fsanitize$(TERMUX_EXEC_PKG__TESTS__API_LEVEL) \
+		lib/termux-exec_c/tests/src/libtermux-exec_c_runtime-binary-tests.c \
+		$(TERMUX_EXEC_EXECUTABLE__C__POST_LDFLAGS)
+	$(TERMUX_EXEC_EXECUTABLE__C__BUILD_COMMAND) -O0 -g \
+		-o $(LIBTERMUX_EXEC__C__TESTS_BUILD_OUTPUT_DIR)/bin/libtermux-exec_c_runtime-binary-tests-nofsanitize$(TERMUX_EXEC_PKG__TESTS__API_LEVEL) \
+		lib/termux-exec_c/tests/src/libtermux-exec_c_runtime-binary-tests.c \
+		$(TERMUX_EXEC_EXECUTABLE__C__POST_LDFLAGS)
+
+
+	@printf "\ntermux-exec-package: %s\n" "Building lib/termux-exec_c/tests/scripts/*"
+	@mkdir -p $(LIBTERMUX_EXEC__C__TESTS_BUILD_OUTPUT_DIR)/scripts
+	find lib/termux-exec_c/tests/scripts -type f -name '*.c' -print0 | xargs -0 -n1 sh -c \
+		'output_file="$(LIBTERMUX_EXEC__C__TESTS_BUILD_OUTPUT_DIR)/scripts/$$(printf "%s" "$$0" | sed -e "s|^lib/termux-exec_c/tests/scripts/||" -e "s/\.c$$//")" && mkdir -p "$$(dirname "$$output_file")" && $(CC) $(CFLAGS) -O0 -fPIE -pie $(LDFLAGS) -g "$$0" -o "$$output_file"'
+	find lib/termux-exec_c/tests/scripts -type f -name '*.sh' -print0 | xargs -0 -n1 sh -c \
+		'output_file="$(LIBTERMUX_EXEC__C__TESTS_BUILD_OUTPUT_DIR)/scripts/$$(printf "%s" "$$0" | sed -e "s|^lib/termux-exec_c/tests/scripts/||")" && mkdir -p "$$(dirname "$$output_file")" && cp -a "$$0" "$$output_file"'
+	find lib/termux-exec_c/tests/scripts -type f -name "*.in" -print0 | xargs -0 -n1 sh -c \
+		'output_file="$(LIBTERMUX_EXEC__C__TESTS_BUILD_OUTPUT_DIR)/scripts/$$(printf "%s" "$$0" | sed -e "s|^lib/termux-exec_c/tests/scripts/||" -e "s/\.in$$//")" && mkdir -p "$$(dirname "$$output_file")" && sed $(TERMUX__CONSTANTS__SED_ARGS) "$$0" > "$$output_file"'
+	find lib/termux-exec_c/tests/scripts -type l -print0 | xargs -0 -n1 sh -c \
+		'output_file="$(LIBTERMUX_EXEC__C__TESTS_BUILD_OUTPUT_DIR)/scripts/$$(printf "%s" "$$0" | sed -e "s|^lib/termux-exec_c/tests/scripts/||")" && mkdir -p "$$(dirname "$$output_file")" && cp -a "$$0" "$$output_file"'
+	find $(LIBTERMUX_EXEC__C__TESTS_BUILD_OUTPUT_DIR)/scripts -type f -exec chmod 700 "{}" \;
+
+
+build-libtermux-exec_c_runtime-binary-tests:
+	@printf "termux-exec-package: %s\n" "Building lib/termux-exec_c/tests/bin/libtermux-exec_c_runtime-binary-tests$(TERMUX_EXEC_PKG__TESTS__API_LEVEL)"
+	@mkdir -p $(LIBTERMUX_EXEC__C__TESTS_BUILD_OUTPUT_DIR)/bin
+
+	$(TERMUX_EXEC_EXECUTABLE__C__BUILD_COMMAND) -O0 -g \
+		$(FSANTIZE_FLAGS) \
+		-o $(LIBTERMUX_EXEC__C__TESTS_BUILD_OUTPUT_DIR)/bin/libtermux-exec_c_runtime-binary-tests-fsanitize$(TERMUX_EXEC_PKG__TESTS__API_LEVEL) \
+		lib/termux-exec_c/tests/src/libtermux-exec_c_runtime-binary-tests.c \
+		$(TERMUX_EXEC_EXECUTABLE__C__POST_LDFLAGS)
+	$(TERMUX_EXEC_EXECUTABLE__C__BUILD_COMMAND) -O0 -g \
+		-o $(LIBTERMUX_EXEC__C__TESTS_BUILD_OUTPUT_DIR)/bin/libtermux-exec_c_runtime-binary-tests-nofsanitize$(TERMUX_EXEC_PKG__TESTS__API_LEVEL) \
+		lib/termux-exec_c/tests/src/libtermux-exec_c_runtime-binary-tests.c \
+		$(TERMUX_EXEC_EXECUTABLE__C__POST_LDFLAGS)
+
 build-libtermux-exec-ld-preload:
 	@# Unlike `libtermux-exec_c.so` and `libtermux-exec_c.a`, all
 	@# symbols are hidden, except the exported functions with
@@ -324,6 +401,10 @@ install:
 	find $(TERMUX_EXEC_PKG__INSTALL_PREFIX)/include/termux-exec -type f -exec chmod 600 {} \;
 
 
+	rm -rf $(TERMUX_EXEC_PKG__INSTALL_PREFIX)/libexec/installed-tests/termux-exec
+	install -d $(TERMUX_EXEC_PKG__INSTALL_PREFIX)/libexec/installed-tests
+	cp -a $(TESTS_BUILD_OUTPUT_DIR) $(TERMUX_EXEC_PKG__INSTALL_PREFIX)/libexec/installed-tests/termux-exec
+
 	@printf "\ntermux-exec-package: %s\n\n" "Install termux-exec-package successful"
 
 uninstall:
@@ -338,6 +419,9 @@ uninstall:
 	rm -f $(TERMUX_EXEC_PKG__INSTALL_PREFIX)/lib/libtermux-exec-ld-preload.so
 	rm -f $(TERMUX_EXEC_PKG__INSTALL_PREFIX)/lib/libtermux-exec.so
 
+
+	rm -rf $(TERMUX_EXEC_PKG__INSTALL_PREFIX)/libexec/installed-tests/termux-exec
+
 	@printf "\ntermux-exec-package: %s\n\n" "Uninstall termux-exec-package successful"
 
 
@@ -346,6 +430,32 @@ packaging-debian-build: all
 	termux-create-package $(DEBIAN_PACKAGING_BUILD_OUTPUT_DIR)/termux-exec-package.json
 
 
+
+test: all
+	$(MAKE) TERMUX_EXEC_PKG__INSTALL_PREFIX=$(PREFIX_BUILD_INSTALL_DIR) install
+
+	@printf "\ntermux-exec-package: %s\n" "Executing termux-exec-package tests"
+	bash $(PREFIX_BUILD_INSTALL_DIR)/libexec/installed-tests/termux-exec/termux-exec-tests \
+		--tests-path="$(PREFIX_BUILD_INSTALL_DIR)/libexec/installed-tests/termux-exec" \
+		--ld-preload="$(PREFIX_BUILD_INSTALL_DIR)/lib/libtermux-exec-ld-preload.so" \
+		-vvv all
+
+test-unit: all
+	$(MAKE) TERMUX_EXEC_PKG__INSTALL_PREFIX=$(PREFIX_BUILD_INSTALL_DIR) install
+
+	@printf "\ntermux-exec-package: %s\n" "Executing termux-exec-package unit tests"
+	bash $(PREFIX_BUILD_INSTALL_DIR)/libexec/installed-tests/termux-exec/termux-exec-tests \
+		--tests-path="$(PREFIX_BUILD_INSTALL_DIR)/libexec/installed-tests/termux-exec" \
+		-vvv unit
+
+test-runtime: all
+	$(MAKE) TERMUX_EXEC_PKG__INSTALL_PREFIX=$(PREFIX_BUILD_INSTALL_DIR) install
+
+	@printf "\ntermux-exec-package: %s\n" "Executing termux-exec-package runtime tests"
+	bash $(PREFIX_BUILD_INSTALL_DIR)/libexec/installed-tests/termux-exec/termux-exec-tests \
+		--tests-path="$(PREFIX_BUILD_INSTALL_DIR)/libexec/installed-tests/termux-exec" \
+		--ld-preload="$(PREFIX_BUILD_INSTALL_DIR)/lib/libtermux-exec-ld-preload.so" \
+		-vvv runtime
 
 
 
@@ -360,4 +470,4 @@ check:
 
 
 
-.PHONY: all pre-build build-libtermux-exec_c build-libtermux-exec-ld-preload clean install uninstall packaging-debian-build format check
+.PHONY: all pre-build build-libtermux-exec_c build-libtermux-exec_c_runtime-binary-tests build-libtermux-exec-ld-preload clean install uninstall packaging-debian-build test test-unit test-runtime format check

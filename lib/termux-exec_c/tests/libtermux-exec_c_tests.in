@@ -1,0 +1,191 @@
+#!@TERMUX__PREFIX@/bin/bash
+# shellcheck shell=bash
+
+##
+# `libtermux_exec__c__tests__main`
+##
+libtermux_exec__c__tests__main() {
+
+    TERMUX_EXEC__TESTS__LOG_TAG="lib@TERMUX__LNAME@-exec_c.tests"
+
+    termux_exec__tests__log 4 "main()"
+
+    # Set `TERMUX_EXEC__TESTS__TESTS_PATH` used by compiled c tests.
+    if [[ ! "$TERMUX_EXEC__TESTS__TESTS_PATH" =~ $TERMUX_EXEC__TESTS__REGEX__ROOTFS_OR_ABSOLUTE_PATH ]]; then
+        termux_exec__tests__log_error "The TERMUX_EXEC__TESTS__TESTS_PATH '$TERMUX_EXEC__TESTS__TESTS_PATH' is either not set or is not an absolute path"
+        return 1
+    fi
+
+
+    # Run unit tests.
+    if [[ "$TERMUX_EXEC__TESTS__RUN_UNIT_TESTS" == "true" ]]; then
+        libtermux_exec__c__unit_tests__run_command || return $?
+    fi
+
+    # Run runtime tests.
+    if [[ "$TERMUX_EXEC__TESTS__RUN_RUNTIME_TESTS" == "true" ]]; then
+        libtermux_exec__c__runtime_tests__run_command || return $?
+    fi
+
+    return 0
+
+}
+
+
+
+##
+# `libtermux_exec__c__unit_tests__run_command`
+##
+libtermux_exec__c__unit_tests__run_command() {
+
+    local return_value
+
+    termux_exec__tests__log 4 "Running 'unit' tests"
+
+    (
+        libtermux_exec__c__unit_binary_tests__run_command || exit $?
+    ) || return $?
+
+    return 0
+
+}
+
+##
+# `libtermux_exec__c__unit_binary_tests__run_command`
+##
+libtermux_exec__c__unit_binary_tests__run_command() {
+
+    local return_value
+
+    local tests_start_time; tests_start_time="$(date "+%s")" || return $?
+
+    local unit_binary_tests_variant="unit-binary-tests"
+
+    if [[ "$TERMUX_EXEC__TESTS__USE_FSANITIZE_BUILDS" == "true" ]]; then
+        unit_binary_tests_variant+="-fsanitize"
+    else
+        unit_binary_tests_variant+="-nofsanitize"
+    fi
+
+    termux_exec__tests__log 1 "Running 'libtermux-exec_c_${unit_binary_tests_variant}'"
+
+    output="$(
+        printf -v "$TERMUX_EXEC__TESTS__LOG_LEVEL___N" "%s" "$TERMUX_EXEC__TESTS__LOG_LEVEL" || exit $?
+        export "${TERMUX_EXEC__TESTS__LOG_LEVEL___N?}" || exit $?
+        ASAN_OPTIONS="fast_unwind_on_malloc=false:detect_leaks=$TERMUX_EXEC__TESTS__DETECT_LEAKS" LSAN_OPTIONS="report_objects=$TERMUX_EXEC__TESTS__DETECT_LEAKS" \
+            "$TERMUX_EXEC__TESTS__TESTS_PATH/lib/termux-exec_c/bin/libtermux-exec_c_${unit_binary_tests_variant}" 2>&1)"
+    return_value=$?
+    if [ $return_value -eq 0 ] ||
+        { [ $return_value -eq 141 ] &&
+            { [[ "$output" == *"WARNING: Can't read from symbolizer at fd"* ]] ||
+              [[ "$output" == *"WARNING: external symbolizer didn't start up correctly!"* ]]
+            } &&
+            [[ "$output" == *"runTests(end)"* ]];
+        }; then
+        printf "%s\n" "$output"
+    else
+        printf "%s\n" "$output" 1>&2
+        termux_exec__tests__log_error "'libtermux-exec_c_${unit_binary_tests_variant}' failed"
+        return $return_value
+    fi
+
+    termux_exec__tests__log 2 "'libtermux-exec_c_${unit_binary_tests_variant}' completed in \
+$(termux_exec__tests__print_elapsed_time "$tests_start_time")"
+
+    return 0
+
+}
+
+
+
+##
+# `libtermux_exec__c__runtime_tests__run_command`
+##
+libtermux_exec__c__runtime_tests__run_command() {
+
+    local return_value
+
+    termux_exec__tests__log 4 "Running 'runtime' tests"
+
+    (
+        libtermux_exec__c__runtime_binary_tests__run_command || return $? || exit $?
+    ) || return $?
+
+    (
+        libtermux_exec__c__runtime_script_tests__run_command || return $? || exit $?
+    ) || return $?
+
+    return 0
+
+}
+
+##
+# `libtermux_exec__c__runtime_binary_tests__run_command`
+##
+libtermux_exec__c__runtime_binary_tests__run_command() {
+
+    local return_value
+
+    local tests_start_time; tests_start_time="$(date "+%s")" || return $?
+
+    local runtime_binary_tests_variant="runtime-binary-tests"
+
+    if [[ "$TERMUX_EXEC__TESTS__USE_FSANITIZE_BUILDS" == "true" ]]; then
+        runtime_binary_tests_variant+="-fsanitize"
+    else
+        runtime_binary_tests_variant+="-nofsanitize"
+    fi
+
+    if [ "$ANDROID__BUILD_VERSION_SDK" -ge 28 ] && \
+            [ -f "$TERMUX_EXEC__TESTS__TESTS_PATH/lib/termux-exec_c/bin/libtermux-exec_c_${runtime_binary_tests_variant}28" ]; then
+        runtime_binary_tests_variant+="28"
+    fi
+
+    termux_exec__tests__log 1 "Running 'libtermux-exec_c_${runtime_binary_tests_variant}'"
+    (
+        printf -v "$TERMUX_EXEC__TESTS__LOG_LEVEL___N" "%s" "$TERMUX_EXEC__TESTS__LOG_LEVEL" || exit $?
+        export "${TERMUX_EXEC__TESTS__LOG_LEVEL___N?}" || exit $?
+        ASAN_OPTIONS="fast_unwind_on_malloc=false:detect_leaks=$TERMUX_EXEC__TESTS__DETECT_LEAKS" LSAN_OPTIONS="report_objects=$TERMUX_EXEC__TESTS__DETECT_LEAKS" \
+            "$TERMUX_EXEC__TESTS__TESTS_PATH/lib/termux-exec_c/bin/libtermux-exec_c_${runtime_binary_tests_variant}"
+    )
+    return_value=$?
+    if [ $return_value -ne 0 ]; then
+        termux_exec__tests__log_error "'libtermux-exec_c_${runtime_binary_tests_variant}' failed"
+        return $return_value
+    fi
+
+    termux_exec__tests__log 2 "'libtermux-exec_c_${runtime_binary_tests_variant}' completed in \
+$(termux_exec__tests__print_elapsed_time "$tests_start_time")"
+
+}
+
+##
+# `libtermux_exec__c__runtime_script_tests__run_command`
+##
+libtermux_exec__c__runtime_script_tests__run_command() {
+
+    local return_value
+
+    local tests_start_time; tests_start_time="$(date "+%s")" || return $?
+
+    termux_exec__tests__log 1 "Running 'libtermux-exec_c_runtime-script-tests'"
+
+    (
+        # shellcheck source=lib/termux-exec_c/tests/scripts/libtermux-exec_c_runtime-script-tests.in
+        termux_exec__tests__source_file_from_path \
+            "$TERMUX_EXEC__TESTS__TESTS_PATH/lib/termux-exec_c/scripts/libtermux-exec_c_runtime-script-tests" || exit $?
+
+        libtermux_exec__c__runtime_script_tests__main
+    )
+    return_value=$?
+    if [ $return_value -ne 0 ]; then
+        termux_exec__tests__log_error "'libtermux-exec_c_runtime-script-tests' failed"
+        return $return_value
+    fi
+
+    termux_exec__tests__log 2 "'libtermux-exec_c_runtime-script-tests' completed in \
+$(termux_exec__tests__print_elapsed_time "$tests_start_time")"
+
+    return 0
+
+}

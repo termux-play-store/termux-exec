@@ -36,3 +36,9 @@ int getTermuxExecSystemLinkerExecConfig() {
     }
     return def;
 }
+
+
+
+int getTermuxExecTestsLogLevel() {
+    return getLogLevelFromEnv(ENV__TERMUX_EXEC__TESTS__LOG_LEVEL);
+}

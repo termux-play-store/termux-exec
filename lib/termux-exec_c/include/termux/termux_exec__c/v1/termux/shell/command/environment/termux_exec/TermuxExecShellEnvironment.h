@@ -81,6 +81,36 @@ static const int E_DEF_VAL__TERMUX_EXEC__SYSTEM_LINKER_EXEC = 1;
 
 
 
+/*
+ * Environment for `termux-exec-tests`.
+ */
+
+/**
+ * Environment variable for the log level for `termux-exec-tests`.
+ *
+ * Type: `int`
+ * Default key: `TERMUX_EXEC__TESTS__LOG_LEVEL`
+ * Default value: DEFAULT_LOG_LEVEL
+ * Values:
+ * - `0` (`OFF`) - Log nothing.
+ * - `1` (`NORMAL`) - Log error, warn and info messages and stacktraces.
+ * - `2` (`DEBUG`) - Log debug messages.
+ * - `3` (`VERBOSE`) - Log verbose messages.
+ * - `4` (`VVERBOSE`) - Log very verbose messages.
+ */
+#define ENV__TERMUX_EXEC__TESTS__LOG_LEVEL TERMUX_ENV__S_TERMUX_EXEC__TESTS "LOG_LEVEL"
+
+
+
+/**
+ * Environment variable for the path to the termux-exec tests.
+ */
+#define ENV__TERMUX_EXEC__TESTS__TESTS_PATH TERMUX_ENV__S_TERMUX_EXEC__TESTS "TESTS_PATH"
+
+
+
+
+
 /**
  * Returns the `termux-exec` config for `Logger` log level
  * based on the `ENV__TERMUX_EXEC__LOG_LEVEL` env variable.
@@ -112,6 +142,17 @@ bool isTermuxExecExecveInterceptEnabled();
  * otherwise defaults to `1` (`enable`).
  */
 int getTermuxExecSystemLinkerExecConfig();
+
+
+
+/**
+ * Returns the `termux-exec-tests` config for `Logger` log level
+ * based on the `ENV__TERMUX_EXEC__TESTS__LOG_LEVEL` env variable.
+ *
+ * @return Return the value if `ENV__TERMUX_EXEC__TESTS__LOG_LEVEL` is
+ * set, otherwise defaults to `DEFAULT_LOG_LEVEL`.
+ */
+int getTermuxExecTestsLogLevel();
 
 
 

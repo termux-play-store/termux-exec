@@ -1,0 +1,420 @@
+#!@TERMUX__PREFIX@/bin/bash
+# shellcheck shell=bash
+
+##
+# `ExecIntercept_runTests`
+##
+ExecIntercept_runTests() {
+
+    termux_exec__tests__log 2 "ExecIntercept_runTests()"
+
+    testExecIntercept || return $?
+
+    return 0
+}
+
+
+
+
+
+testExecIntercept() {
+
+    termux_exec__tests__log 3 "testExecIntercept()"
+
+    testExecIntercept__Basic || return $?
+    testExecIntercept__Interpreter || return $?
+    testExecIntercept__SingleAndDoubleDotExecutablePaths || return $?
+    testExecIntercept__SingleAndDoubleDotInterpreterPaths || return $?
+    testExecIntercept__Shell || return $?
+
+    return 0
+
+}
+
+testExecIntercept__Basic() {
+
+    termux_exec__tests__log 4 "testExecIntercept__Basic()"
+
+    termux_exec__tests__run_script_test "not-executable" \
+         --no-test-file-set-executable \
+        "#!/bin/bash${NL}echo hello" \
+        126 "^.*: $TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_PATH: Permission denied$" || return $?
+
+    termux_exec__tests__run_script_test "is-executable" \
+        "#!/bin/bash${NL}echo hello" \
+        0 "^hello$" || return $?
+
+    termux_exec__tests__run_script_test "usr-bin-env" \
+        "#!/usr/bin/env bash${NL}echo hello-user-bin-env" \
+        0 "^hello-user-bin-env$" || return $?
+
+    termux_exec__tests__run_script_test "termux-bin-env" \
+        "#!$TERMUX__PREFIX/bin/env bash${NL}echo hello-termux-bin-env" \
+        0 "^hello-termux-bin-env$" || return $?
+
+    termux_exec__tests__run_script_test "empty-file" \
+        "" \
+        0 "^$" || return $?
+
+    return 0
+
+}
+
+testExecIntercept__Interpreter() {
+
+    termux_exec__tests__log 4 "testExecIntercept__Interpreter()"
+
+    # `termux-exec` will return with the `Not an ELF or no shebang in executable path (ENOEXEC)`
+    # error, but bash will manually execute the script.
+    BASH_VERSION="" termux_exec__tests__run_script_test "shebang-with-pre-!-whitespace" \
+        "# !/bin/sh${NL}echo \"\$BASH_VERSION\"" \
+        0 "^$(termux_exec__tests__escape_string_for_regex "$BASH_VERSION")$" || return $?
+
+    termux_exec__tests__run_script_test "shebang-with-pre-path-whitespace" \
+        "#! /bin/sh${NL}echo hello" \
+        0 "^hello$" || return $?
+
+    termux_exec__tests__run_script_test "shebang-with-args-with-spaces" \
+        "#!/bin/echo     hello  world   bye${NL}" \
+        0 "^hello  world   bye $TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_PATH arg1 arg2$" \
+        "arg1" "arg2" || return $?
+
+
+    termux_exec__tests__run_script_test "shebang-path-missing" \
+        "#!${NL}" \
+        0 "^$" || return $?
+
+    termux_exec__tests__run_script_test "shebang-path-whitespace" \
+        "#! ${NL}" \
+        0 "^$" || return $?
+
+    termux_exec__tests__run_script_test "shebang-path-rootfs" \
+        "#!/${NL}" \
+        126 "^.*: $TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_PATH: /: bad interpreter: Permission denied$" || return $?
+
+    if [ "$ANDROID__BUILD_VERSION_SDK" -ge 24 ]; then
+        termux_exec__tests__run_script_test "shebang-path-not-found" \
+            "#!/x${NL}" \
+            127 "^.*: $TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_PATH: cannot execute: required file not found$" || return $?
+    else
+        termux_exec__tests__run_script_test "shebang-path-not-found" \
+            "#!/x${NL}" \
+            126 "^.*: $TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_PATH: /x: bad interpreter: No such file or directory$" || return $?
+    fi
+
+    return 0
+
+}
+
+testExecIntercept__SingleAndDoubleDotExecutablePaths() {
+
+    termux_exec__tests__log 4 "testExecIntercept__SingleAndDoubleDotExecutablePaths()"
+
+    # $TMPDIR
+    #   - termux-exec
+    #     - exec
+    #       - dir1
+    #         - subdir1
+    #       - dir2
+
+    local tests_dir_path="$TERMUX_EXEC__TESTS__EXEC_TMPDIR_PATH"
+    rm -rf "$tests_dir_path" || return $?
+
+    local dir1_name="dir1"
+    local dir1_path="$tests_dir_path/$dir1_name"
+    local subdir1_name="subdir1"
+    local subdir1_path="$dir1_path/$subdir1_name"
+    mkdir -p "$subdir1_path" || return $?
+
+    local dir2_name="dir2"
+    local dir2_path="$tests_dir_path/$dir2_name"
+    mkdir -p "$dir2_path" || return $?
+
+    local original_script_test_file_path="$TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_PATH"
+
+
+
+    # Relative: Executable in current directory.
+    TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_PATH="$tests_dir_path/$TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_NAME"
+
+    termux_exec__tests__run_script_test "executable-relative-current-dir-one-single-dot" \
+        --executable-path="./$TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_NAME" --working-dir="$tests_dir_path" \
+        "#!/bin/bash${NL}echo hello" \
+        0 "^hello$" || return $?
+
+    termux_exec__tests__run_script_test "executable-relative-current-dir-two-single-dot" \
+        --executable-path="././$TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_NAME" --working-dir="$tests_dir_path" \
+        "#!/bin/bash${NL}echo hello" \
+        0 "^hello$" || return $?
+
+
+    # Relative: Executable in parent directory.
+    TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_PATH="$tests_dir_path/$TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_NAME"
+
+    termux_exec__tests__run_script_test "executable-relative-parent-dir-one-double-dot" \
+        --executable-path="../$TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_NAME" --working-dir="$dir1_path" \
+        "#!/bin/bash${NL}echo hello" \
+        0 "^hello$" || return $?
+
+    termux_exec__tests__run_script_test "executable-relative-parent-dir-two-double-dot" \
+        --executable-path="../../$TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_NAME" --working-dir="$subdir1_path" \
+        "#!/bin/bash${NL}echo hello" \
+        0 "^hello$" || return $?
+
+
+    # Relative: Executable in sibling directory.
+    TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_PATH="$dir2_path/$TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_NAME"
+
+    termux_exec__tests__run_script_test "executable-relative-sibling-dir-one-double-dot" \
+        --executable-path="../$dir2_name/$TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_NAME" --working-dir="$dir1_path" \
+        "#!/bin/bash${NL}echo hello" \
+        0 "^hello$" || return $?
+
+    termux_exec__tests__run_script_test "executable-relative-sibling-dir-two-double-dot" \
+        --executable-path="../../$dir2_name/$TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_NAME" --working-dir="$subdir1_path" \
+        "#!/bin/bash${NL}echo hello" \
+        0 "^hello$" || return $?
+
+
+
+    # Absolute: Executable in current directory.
+    TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_PATH="$tests_dir_path/$TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_NAME"
+
+    termux_exec__tests__run_script_test "executable-absolute-current-dir-one-single-dot" \
+        --executable-path="$tests_dir_path/./$TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_NAME" \
+        "#!/bin/bash${NL}echo hello" \
+        0 "^hello$" || return $?
+
+    termux_exec__tests__run_script_test "executable-absolute-current-dir-two-single-dot" \
+        --executable-path="$tests_dir_path/././$TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_NAME" \
+        "#!/bin/bash${NL}echo hello" \
+        0 "^hello$" || return $?
+
+
+    # Absolute: Executable in parent directory.
+    TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_PATH="$tests_dir_path/$TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_NAME"
+
+    termux_exec__tests__run_script_test "executable-absolute-parent-dir-one-double-dot" \
+        --executable-path="$dir1_path/../$TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_NAME" \
+        "#!/bin/bash${NL}echo hello" \
+        0 "^hello$" || return $?
+
+    termux_exec__tests__run_script_test "executable-absolute-parent-dir-two-double-dot" \
+        --executable-path="$subdir1_path/../../$TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_NAME" \
+        "#!/bin/bash${NL}echo hello" \
+        0 "^hello$" || return $?
+
+
+    # Absolute: Executable in sibling directory.
+    TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_PATH="$dir2_path/$TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_NAME"
+
+    termux_exec__tests__run_script_test "executable-absolute-sibling-dir-one-double-dot" \
+        --executable-path="$dir1_path/../$dir2_name/$TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_NAME" \
+        "#!/bin/bash${NL}echo hello" \
+        0 "^hello$" || return $?
+
+    termux_exec__tests__run_script_test "executable-absolute-sibling-dir-two-double-dot" \
+        --executable-path="$subdir1_path/../../$dir2_name/$TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_NAME" \
+        "#!/bin/bash${NL}echo hello" \
+        0 "^hello$" || return $?
+
+
+
+    TERMUX_EXEC__TESTS__SCRIPT_TEST_FILE_PATH="$original_script_test_file_path"
+
+    return 0
+
+}
+
+testExecIntercept__SingleAndDoubleDotInterpreterPaths() {
+
+    termux_exec__tests__log 4 "testExecIntercept__SingleAndDoubleDotInterpreterPaths()"
+
+    # $TMPDIR
+    #   - termux-exec
+    #     - exec
+    #       - dir1
+    #         - subdir1
+    #       - dir2
+
+    local tests_dir_path="$TERMUX_EXEC__TESTS__EXEC_TMPDIR_PATH"
+    rm -rf "$tests_dir_path" || return $?
+
+    local dir1_name="dir1"
+    local dir1_path="$tests_dir_path/$dir1_name"
+    local subdir1_name="subdir1"
+    local subdir1_path="$dir1_path/$subdir1_name"
+    mkdir -p "$subdir1_path" || return $?
+
+    local dir2_name="dir2"
+    local dir2_path="$tests_dir_path/$dir2_name"
+    mkdir -p "$dir2_path" || return $?
+
+
+    local bash_bin_path="$TERMUX__PREFIX/bin/bash"
+    local interpreter_file_name="bash"
+    local interpreter_file_path
+
+
+    # Relative: Executable in current directory.
+    interpreter_file_path="$tests_dir_path/$interpreter_file_name"
+    ln -s "$bash_bin_path" "$interpreter_file_path" || return $?
+
+    termux_exec__tests__run_script_test "interpreter-relative-current-dir-one-single-dot" \
+        --working-dir="$tests_dir_path" \
+        "#!./$interpreter_file_name${NL}echo hello" \
+        0 "^hello$" || return $?
+
+    termux_exec__tests__run_script_test "interpreter-relative-current-dir-two-single-dot" \
+        --working-dir="$tests_dir_path" \
+        "#!././$interpreter_file_name${NL}echo hello" \
+        0 "^hello$" || return $?
+
+    rm -f "$interpreter_file_path" || return $?
+
+
+    # Relative: Executable in parent directory.
+    interpreter_file_path="$tests_dir_path/$interpreter_file_name"
+    ln -s "$bash_bin_path" "$interpreter_file_path" || return $?
+
+    termux_exec__tests__run_script_test "interpreter-relative-parent-dir-one-double-dot" \
+        --working-dir="$dir1_path" \
+        "#!../$interpreter_file_name${NL}echo hello" \
+        0 "^hello$" || return $?
+
+    termux_exec__tests__run_script_test "interpreter-relative-parent-dir-two-double-dot" \
+        --working-dir="$subdir1_path" \
+        "#!../../$interpreter_file_name${NL}echo hello" \
+        0 "^hello$" || return $?
+
+    rm -f "$interpreter_file_path" || return $?
+
+
+    # Relative: Executable in sibling directory.
+    interpreter_file_path="$dir2_path/$interpreter_file_name"
+    ln -s "$bash_bin_path" "$interpreter_file_path" || return $?
+
+    termux_exec__tests__run_script_test "interpreter-relative-sibling-dir-one-double-dot" \
+        --working-dir="$dir1_path" \
+        "#!../$dir2_name/$interpreter_file_name${NL}echo hello" \
+        0 "^hello$" || return $?
+
+    termux_exec__tests__run_script_test "interpreter-relative-sibling-dir-two-double-dot" \
+        --working-dir="$subdir1_path" \
+        "#!../../$dir2_name/$interpreter_file_name${NL}echo hello" \
+        0 "^hello$" || return $?
+
+    rm -f "$interpreter_file_path" || return $?
+
+
+
+    # Absolute: Executable in current directory.
+    interpreter_file_path="$tests_dir_path/$interpreter_file_name"
+    ln -s "$bash_bin_path" "$interpreter_file_path" || return $?
+
+    termux_exec__tests__run_script_test "interpreter-absolute-current-dir-one-single-dot" \
+        "#!$tests_dir_path/./$interpreter_file_name${NL}echo hello" \
+        0 "^hello$" || return $?
+
+    termux_exec__tests__run_script_test "interpreter-absolute-current-dir-two-single-dot" \
+        "#!$tests_dir_path/././$interpreter_file_name${NL}echo hello" \
+        0 "^hello$" || return $?
+
+    rm -f "$interpreter_file_path" || return $?
+
+
+    # Absolute: Executable in parent directory.
+    interpreter_file_path="$tests_dir_path/$interpreter_file_name"
+    ln -s "$bash_bin_path" "$interpreter_file_path" || return $?
+
+    termux_exec__tests__run_script_test "interpreter-absolute-parent-dir-one-double-dot" \
+        "#!$dir1_path/../$interpreter_file_name${NL}echo hello" \
+        0 "^hello$" || return $?
+
+    termux_exec__tests__run_script_test "interpreter-absolute-parent-dir-two-double-dot" \
+        "#!$subdir1_path/../../$interpreter_file_name${NL}echo hello" \
+        0 "^hello$" || return $?
+
+    rm -f "$interpreter_file_path" || return $?
+
+
+    # Absolute: Executable in sibling directory.
+    interpreter_file_path="$dir2_path/$interpreter_file_name"
+    ln -s "$bash_bin_path" "$interpreter_file_path" || return $?
+
+    termux_exec__tests__run_script_test "interpreter-absolute-sibling-dir-one-double-dot" \
+        "#!$dir1_path/../$dir2_name/$interpreter_file_name${NL}echo hello" \
+        0 "^hello$" || return $?
+
+    termux_exec__tests__run_script_test "interpreter-absolute-sibling-dir-two-double-dot" \
+        "#!$subdir1_path/../../$dir2_name/$interpreter_file_name${NL}echo hello" \
+        0 "^hello$" || return $?
+
+    rm -f "$interpreter_file_path" || return $?
+
+    return 0
+
+}
+
+testExecIntercept__Shell() {
+
+    termux_exec__tests__log 4 "testExecIntercept__Shell()"
+
+    # `/dev/stdin` does not exist on Android 7, so use `/proc/self/fd/0`
+
+    termux_exec__tests__run_script_test "bash-heredoc-no-args" \
+        "#!/usr/bin/bash${NL}bash <<'EOF'${NL}echo hello${NL}EOF" \
+        0 "^hello$" || return $?
+
+    termux_exec__tests__run_script_test "cat-bash-heredoc-no-args" \
+        "#!/usr/bin/bash${NL}cat <<'EOF' | bash${NL}echo hello${NL}EOF" \
+        0 "^hello$" || return $?
+
+
+    termux_exec__tests__run_script_test "bash-heredoc-with-args" \
+        "#!/usr/bin/bash${NL}bash /proc/self/fd/0 hello<<'EOF'${NL}echo \$1${NL}EOF" \
+        0 "^hello$" || return $?
+
+    termux_exec__tests__run_script_test "cat-bash-heredoc-with-args" \
+        "#!/usr/bin/bash${NL}cat <<'EOF' | bash /proc/self/fd/0 hello${NL}echo \$1${NL}EOF" \
+        0 "^hello$" || return $?
+
+
+    termux_exec__tests__run_script_test "bash-herestring-no-args" \
+        "#!/usr/bin/bash${NL}bash <<<'echo hello'" \
+        0 "^hello$" || return $?
+
+    termux_exec__tests__run_script_test "cat-bash-herestring-no-args" \
+        "#!/usr/bin/bash${NL}cat <<<'echo hello' | bash" \
+        0 "^hello$" || return $?
+
+
+    termux_exec__tests__run_script_test "bash-herestring-with-args" \
+        "#!/usr/bin/bash${NL}bash  /proc/self/fd/0 hello <<<'echo \$1'" \
+        0 "^hello$" || return $?
+
+    termux_exec__tests__run_script_test "cat-bash-herestring-with-args" \
+        "#!/usr/bin/bash${NL}cat <<<'echo \$1' | bash /proc/self/fd/0 hello" \
+        0 "^hello$" || return $?
+
+
+    termux_exec__tests__run_script_test "builtin-echo-cat-pipe" \
+        "#!/usr/bin/bash${NL}echo hello | cat" \
+        0 "^hello$" || return $?
+
+    termux_exec__tests__run_script_test "external-echo-cat-pipe" \
+        "#!/usr/bin/bash${NL}$TERMUX__PREFIX/bin/echo hello | cat" \
+        0 "^hello$" || return $?
+
+    termux_exec__tests__run_script_test "external-echo-sed-pipe" \
+        "#!/usr/bin/bash${NL}$TERMUX__PREFIX/bin/echo '|hello|' | sed -e 's/|//g'" \
+        0 "^hello$" || return $?
+
+
+    termux_exec__tests__run_script_test "fd-read-write" \
+        "#!/usr/bin/bash${NL}exec {fd}< <(echo -n hello)${NL}cat /proc/self/fd/\${fd}${NL}exec {fd}>&-" \
+        0 "^hello$" || return $?
+
+    return 0
+
+}

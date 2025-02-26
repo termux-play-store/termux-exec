@@ -1,0 +1,43 @@
+#!@TERMUX__PREFIX@/bin/bash
+# shellcheck shell=bash
+
+##
+# `libtermux_exec__c__runtime_script_tests__main`
+##
+libtermux_exec__c__runtime_script_tests__main() {
+
+    TERMUX_EXEC__TESTS__LOG_TAG="lib@TERMUX__LNAME@-exec_c.rs-tests"
+
+    termux_exec__tests__log 4 "main()"
+
+
+    # Run tests.
+    libtermux_exec__c__runtime_script_tests__run_tests || return $?
+
+    return 0
+}
+
+##
+# `libtermux_exec__c__runtime_script_tests__run_tests`
+##
+libtermux_exec__c__runtime_script_tests__run_tests() {
+
+    termux_exec__tests__log 2 "runTests(start)"
+
+    TERMUX_EXEC__TESTS__TESTS_COUNT="0"
+    TERMUX_EXEC__TESTS__LOG_EMPTY_LINE_AFTER_SCRIPT_TEST="true"
+
+
+
+    (
+        # shellcheck source=lib/termux-exec_c/tests/scripts/termux/api/termux_exec/exec/exec-intercept_runtime-script-tests.in
+        termux_exec__tests__source_file_from_path \
+            "$TERMUX_EXEC__TESTS__TESTS_PATH/lib/termux-exec_c/scripts/termux/api/termux_exec/exec/exec-intercept_runtime-script-tests" || exit $?
+        ExecIntercept_runTests || exit $?
+    ) || return $?
+
+
+
+    termux_exec__tests__log 2 "runTests(end): $TERMUX_EXEC__TESTS__TESTS_COUNT tests completed"
+
+}
