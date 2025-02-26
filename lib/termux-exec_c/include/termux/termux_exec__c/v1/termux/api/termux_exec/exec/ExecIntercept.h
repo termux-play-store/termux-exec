@@ -195,6 +195,51 @@ int inspectFileHeader(const char *termuxPrefixDir, char *header, size_t headerLe
     struct FileHeaderInfo *info);
 
 
+/**
+ * Whether to use `system_linker_exec`, like to bypass app data file
+ * execute restrictions.
+ *
+ * A call is made to `getTermuxExecSystemLinkerExecConfig()` to
+ * get the config for using `system_linker_exec`.
+ *
+ * If `disable` is set, then `system_linker_exec` should not be used
+ * and the default `direct` execution type should be used.
+ *
+ * If `enable` is set, then `system_linker_exec` should only be used if:
+ * - `system_linker_exec` is required to bypass app data file execute
+ *   restrictions, i.e device is running on Android `>= 10`.
+ * - Effective user does not equal root (`0`) and shell (`2000`) user (used for
+ *   [`adb`](https://developer.android.com/tools/adb)).
+ * - `TERMUX__SE_PROCESS_CONTEXT` or its fallback `/proc/self/attr/current`
+ *    does not start with `PROCESS_CONTEXT_PREFIX__UNTRUSTED_APP_25` and
+ *   `PROCESS_CONTEXT_PREFIX__UNTRUSTED_APP_27` for which restrictions
+ *   are exempted.
+ * - `isPathUnderTermuxAppDataDir()` returns `true` for the `executablePath`.
+ *
+ * If `force` is set, then `system_linker_exec` should only be used if:
+ * - `system_linker_exec` is supported, i.e device is running on Android `>= 10`.
+ * - `isPathUnderTermuxAppDataDir()` returns `true` for the `executablePath`.
+ * This can be used if running in an untrusted app with `targetSdkVersion` `<= 28`.
+ *
+ * The executable or interpreter paths are checked under
+ * `TERMUX_APP__DATA_DIR` or `TERMUX_APP__LEGACY_DATA_DIR` instead of
+ * `TERMUX__ROOTFS` as files could be executed from `TERMUX__APPS_DIR`
+ * and `TERMUX__CACHE_DIR`, which are not under the Termux rootfs.
+ * Additionally, Termux rootfs may not exist under app data directory
+ * at all and could be under another directory under Android rootfs `/`,
+ * like if compiling packages for `shell` user for the `com.android.shell`
+ * package with the Termux rootfs under `/data/local/tmp` instead of
+ * `/data/data/com.android.shell` (and using `force` mode) or
+ * compiling packages for `/system` directory.
+ *
+ * @param executablePath The **normalized** executable or interpreter
+ *                        path that will actually be executed.
+ * @return Returns `0` if `system_linker_exec` should not be used,
+ * `1` if `system_linker_exec` should be used, otherwise `-1` on failures.
+ */
+int shouldSystemLinkerExec(const char *executablePath);
+
+
 
 /**
  * Whether variables in `LD_VARS_TO_UNSET` should be unset before `exec()`
@@ -237,6 +282,9 @@ int modifyExecEnv(char *const *envp, char ***newEnvpPointer,
  * `FileHeaderInfo.origInterpreterPath`, otherwise the original
  * `argv[0]` passed to `execve()` will be preserved.
  *
+ * If `systemLinkerExec` is `true`, then `argv[1]` will be set
+ * to `executablePath` to be executed by the linker.
+ *
  * If `interpreterSet` is set, then `FileHeaderInfo.interpreterArg`
  * will be appended if set, followed by the `origExecutablePath`
  * passed to `execve()`.
@@ -251,6 +299,7 @@ int modifyExecEnv(char *const *envp, char ***newEnvpPointer,
  *                        path that will actually be executed.
  * @param interpreterSet Whether a interpreter is set in the executable
  *                        file.
+ * @param systemLinkerExec Whether `system_linker_exec` is enabled.
  * @param info The `FileHeaderInfo` for the executable file.
  * @return Returns `0` if successfully modified the args, otherwise
  * `-1` on failures. Its the callers responsibility to call `free()`
@@ -258,7 +307,7 @@ int modifyExecEnv(char *const *envp, char ***newEnvpPointer,
  */
 int modifyExecArgs(char *const *argv, const char ***newArgvPointer,
     const char *origExecutablePath, const char *executablePath,
-    bool interpreterSet, struct FileHeaderInfo *info);
+    bool interpreterSet, bool systemLinkerExec, struct FileHeaderInfo *info);
 
 
 

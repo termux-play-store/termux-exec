@@ -223,12 +223,44 @@ int execveInterceptInternal(const char *origExecutablePath, char *const argv[], 
 
 
 
+
+    // Check if `system_linker_exec` is required.
+    int systemLinkerExec = shouldSystemLinkerExec(executablePath);
+    if (systemLinkerExec < 0) {
+        return -1;
+    }
+
+
+
     bool modifyEnv = false;
     bool unsetLdVarsFromEnv = shouldUnsetLDVarsFromEnv(info.isNonNativeElf, executablePath);
     logErrorVVerbose(LOG_TAG, "unset_ld_vars_from_env: '%d'", unsetLdVarsFromEnv);
 
     if (unsetLdVarsFromEnv && areVarsInEnv(envp, LD_VARS_TO_UNSET, LD_VARS_TO_UNSET_SIZE)) {
         modifyEnv = true;
+    }
+
+
+
+    // If `system_linker_exec` is going to be used, then set `TERMUX_EXEC__PROC_SELF_EXE`
+    // environment variable to `processedExecutablePath`, otherwise
+    // unset it if it is already set.
+    char *envTermuxProcSelfExe = NULL;
+    if (systemLinkerExec) {
+        modifyEnv = true;
+        logErrorVVerbose(LOG_TAG, "set_proc_self_exe_var_in_env: '%d'", true);
+
+        if (asprintf(&envTermuxProcSelfExe, "%s%s", ENV_PREFIX__TERMUX_EXEC__PROC_SELF_EXE, processedExecutablePath) == -1) {
+            errno = ENOMEM;
+            logStrerrorDebug(LOG_TAG, "asprintf failed for '%s%s'", ENV_PREFIX__TERMUX_EXEC__PROC_SELF_EXE, processedExecutablePath);
+            return -1;
+        }
+    } else {
+        const char *proc_self_exe_var[] = { ENV_PREFIX__TERMUX_EXEC__PROC_SELF_EXE };
+        if (areVarsInEnv(envp, proc_self_exe_var, 1)) {
+            logErrorVVerbose(LOG_TAG, "unset_proc_self_exe_var_from_env: '%d'", true);
+            modifyEnv = true;
+        }
     }
 
     logErrorVVerbose(LOG_TAG, "modify_env: '%d'", modifyEnv);
@@ -249,18 +281,23 @@ int execveInterceptInternal(const char *origExecutablePath, char *const argv[], 
 
 
 
-    const bool modifyArgs = interpreterSet;
+    const bool modifyArgs = systemLinkerExec || interpreterSet;
     logErrorVVerbose(LOG_TAG, "modify_args: '%d'", modifyArgs);
 
     const char **newArgv = NULL;
     if (modifyArgs) {
         if (modifyExecArgs(argv, &newArgv, origExecutablePath, executablePath,
-            interpreterSet, &info) != 0 ||
+            interpreterSet, systemLinkerExec, &info) != 0 ||
             newArgv == NULL) {
             logErrorDebug(LOG_TAG, "Failed to create modified exec args");
             free(envTermuxProcSelfExe);
             free(newEnvp);
             return -1;
+        }
+
+        // Replace executable path if wrapping with linker.
+        if (systemLinkerExec) {
+            executablePath = SYSTEM_LINKER_PATH;
         }
 
         argv = (char **) newArgv;
@@ -468,6 +505,97 @@ int inspectFileHeader(const char *termuxPrefixDir, char *header, size_t headerLe
 
 
 
+int shouldSystemLinkerExec(const char *executablePath) {
+    int systemLinkerExecConfig = getTermuxExecSystemLinkerExecConfig();
+    logErrorVVerbose(LOG_TAG, "system_linker_exec_config: '%d'", systemLinkerExecConfig);
+
+    bool systemLinkerExec = false;
+    if (systemLinkerExecConfig == 0) { // disable
+        systemLinkerExec = false;
+
+    } else if (systemLinkerExecConfig == 2) { // force
+            bool systemLinkerExecAvailable = false;
+            systemLinkerExecAvailable = getAndroidBuildVersionSdk() >= 29;
+            logErrorVVerbose(LOG_TAG, "system_linker_exec_available: '%d'", systemLinkerExecAvailable);
+
+            if (systemLinkerExecAvailable) {
+                int isExecutableUnderTermuxAppDataDir = isPathUnderTermuxAppDataDir(LOG_TAG,
+                    executablePath, NULL, NULL);
+                if (isExecutableUnderTermuxAppDataDir < 0) {
+                    return -1;
+                }
+                logErrorVVerbose(LOG_TAG, "isExecutableUnderTermuxAppDataDir: '%d'",
+                    isExecutableUnderTermuxAppDataDir == 0 ? true : false);
+
+                systemLinkerExec = isExecutableUnderTermuxAppDataDir == 0;
+            }
+
+    } else { // enable
+        if (systemLinkerExecConfig != 1) {
+            logErrorDebug(LOG_TAG, "Warning: Ignoring invalid system_linker_exec_config value and using '1' instead");
+        }
+
+        bool appDataFileExecExempted = false;
+        (void)appDataFileExecExempted;
+
+        if (getAndroidBuildVersionSdk() >= 29) {
+            // If running as root or shell user, then the process will
+            // be assigned a different process context like
+            // `PROCESS_CONTEXT__AOSP_SU`,
+            // `PROCESS_CONTEXT__MAGISK_SU` or
+            // `PROCESS_CONTEXT__SHELL`, which will not be the same
+            // as the one that's exported in
+            // `ENV__TERMUX__SE_PROCESS_CONTEXT`, so we need to check
+            // effective uid equals `0` or `2000` instead. Moreover,
+            // other su providers may have different contexts, so we
+            // cannot just check AOSP or MAGISK contexts.
+            // - https://man7.org/linux/man-pages/man2/getuid.2.html
+            uid_t uid = geteuid();
+            if (uid == 0 || uid == 2000) {
+                logErrorVVerbose(LOG_TAG, "uid: '%d'", uid);
+                appDataFileExecExempted = true;
+            } else {
+                char seProcessContext[80];
+                bool getSeProcessContextSuccess = false;
+
+                if (getSeProcessContextFromEnv(LOG_TAG, ENV__TERMUX__SE_PROCESS_CONTEXT,
+                    seProcessContext, sizeof(seProcessContext))) {
+                    logErrorVVerbose(LOG_TAG, "se_process_context_from_env: '%s'", seProcessContext);
+                    getSeProcessContextSuccess = true;
+                } else if (getSeProcessContextFromFile(LOG_TAG,
+                    seProcessContext, sizeof(seProcessContext))) {
+                    logErrorVVerbose(LOG_TAG, "se_process_context_from_file: '%s'", seProcessContext);
+                    getSeProcessContextSuccess = true;
+                }
+
+                if (getSeProcessContextSuccess) {
+                    appDataFileExecExempted = stringStartsWith(seProcessContext, PROCESS_CONTEXT_PREFIX__UNTRUSTED_APP_25) ||
+                        stringStartsWith(seProcessContext, PROCESS_CONTEXT_PREFIX__UNTRUSTED_APP_27);
+                }
+            }
+
+            logErrorVVerbose(LOG_TAG, "app_data_file_exec_exempted: '%d'", appDataFileExecExempted);
+
+            if (!appDataFileExecExempted) {
+                int isExecutableUnderTermuxAppDataDir = isPathUnderTermuxAppDataDir(LOG_TAG,
+                    executablePath, NULL, NULL);
+                if (isExecutableUnderTermuxAppDataDir < 0) {
+                    return -1;
+                }
+
+                systemLinkerExec = isExecutableUnderTermuxAppDataDir == 0;
+                logErrorVVerbose(LOG_TAG, "is_executable_under_termux_app_data_dir: '%d'", systemLinkerExec);
+            }
+        }
+    }
+
+    logErrorVVerbose(LOG_TAG, "system_linker_exec: '%d'", systemLinkerExec);
+
+    return 1 ? systemLinkerExec : 0;
+}
+
+
+
 bool shouldUnsetLDVarsFromEnv(bool isNonNativeElf, const char *executablePath) {
     return isNonNativeElf ||
         (stringStartsWith(executablePath, "/system/") &&
@@ -553,7 +681,7 @@ int modifyExecEnv(char *const *envp, char ***newEnvpPointer,
 
 int modifyExecArgs(char *const *argv, const char ***newArgvPointer,
     const char *origExecutablePath, const char *executablePath,
-    bool interpreterSet, struct FileHeaderInfo *info) {
+    bool interpreterSet, bool systemLinkerExec, struct FileHeaderInfo *info) {
     int argsCount = 0;
     while (argv[argsCount] != NULL) {
         argsCount++;
@@ -577,6 +705,11 @@ int modifyExecArgs(char *const *argv, const char ***newArgvPointer,
     } else {
         // Preserver original `argv[0]` to `execve()`.
         newArgv[index++] = argv[0];
+    }
+
+    // Add executable path if wrapping with linker.
+    if (systemLinkerExec) {
+        newArgv[index++] = executablePath;
     }
 
     // Add interpreter argument and script path if executing a script with shebang.

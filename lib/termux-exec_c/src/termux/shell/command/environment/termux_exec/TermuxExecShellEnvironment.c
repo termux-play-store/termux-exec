@@ -21,3 +21,18 @@ int getTermuxExecLogLevel() {
 bool isTermuxExecExecveInterceptEnabled() {
     return getBoolEnvValue(ENV__TERMUX_EXEC__INTERCEPT_EXECVE, E_DEF_VAL__TERMUX_EXEC__INTERCEPT_EXECVE);
 }
+
+int getTermuxExecSystemLinkerExecConfig() {
+    int def = E_DEF_VAL__TERMUX_EXEC__SYSTEM_LINKER_EXEC;
+    const char* value = getenv(ENV__TERMUX_EXEC__SYSTEM_LINKER_EXEC);
+    if (value == NULL || strlen(value) < 1) {
+        return def;
+    } else if (strcmp(value, "disable") == 0) {
+        return 0;
+    } else if (strcmp(value, "enable") == 0) {
+        return 1;
+    } else if (strcmp(value, "force") == 0) {
+        return 2;
+    }
+    return def;
+}

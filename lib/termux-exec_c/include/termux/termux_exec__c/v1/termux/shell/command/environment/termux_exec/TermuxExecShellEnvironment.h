@@ -44,6 +44,42 @@ extern "C" {
 #define ENV__TERMUX_EXEC__INTERCEPT_EXECVE TERMUX_ENV__S_TERMUX_EXEC "INTERCEPT_EXECVE"
 static const bool E_DEF_VAL__TERMUX_EXEC__INTERCEPT_EXECVE = true;
 
+/**
+ * Environment variable for whether use System Linker Exec Solution,
+ * like to bypass App Data File Execute Restrictions.
+ *
+ * See also `shouldSystemLinkerExec()`
+ *
+ * Type: `string`
+ * Default key: `TERMUX_EXEC__SYSTEM_LINKER_EXEC`
+ * Default value: E_DEF_VAL__TERMUX_EXEC__SYSTEM_LINKER_EXEC
+ * Values:
+ * - `disable` - The `system_linker_exec` will be disabled.
+ * - `enable` - The `system_linker_exec` will be enabled but only if required.
+ * - `force` - The `system_linker_exec` will be force enabled even if not required.
+ */
+#define ENV__TERMUX_EXEC__SYSTEM_LINKER_EXEC TERMUX_ENV__S_TERMUX_EXEC "SYSTEM_LINKER_EXEC"
+static const int E_DEF_VAL__TERMUX_EXEC__SYSTEM_LINKER_EXEC = 1;
+
+
+
+/**
+ * Environment variable for the path to the executable file is being
+ * executed by `execve()` is using `system_linker_exec`.
+ *
+ * Type: `string`
+ * Default key: `TERMUX_EXEC__PROC_SELF_EXE`
+ * Values:
+ * - The normalized, absolutized and prefixed path for the executable
+ * file is being executed by `execve()` if `system_linker_exec` is
+ * being used.
+ */
+#define ENV__TERMUX_EXEC__PROC_SELF_EXE TERMUX_ENV__S_TERMUX_EXEC "PROC_SELF_EXE"
+#define ENV_PREFIX__TERMUX_EXEC__PROC_SELF_EXE ENV__TERMUX_EXEC__PROC_SELF_EXE "="
+
+
+
+
 
 /**
  * Returns the `termux-exec` config for `Logger` log level
@@ -66,6 +102,19 @@ int getTermuxExecLogLevel();
  * bool enabled, `false` if bool disabled, otherwise defaults to `true`.
  */
 bool isTermuxExecExecveInterceptEnabled();
+
+/**
+ * Returns the `termux-exec` config for `system_linker_exec` based on
+ * the `ENV__TERMUX_EXEC__SYSTEM_LINKER_EXEC` env variable.
+ *
+ * @return Return `0` if `ENV__TERMUX_EXEC__SYSTEM_LINKER_EXEC` is set
+ * to `disable`, `1` if set to `enable`, `2` if set to `force`,
+ * otherwise defaults to `1` (`enable`).
+ */
+int getTermuxExecSystemLinkerExecConfig();
+
+
+
 #ifdef __cplusplus
 }
 #endif
