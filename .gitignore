@@ -1,7 +1,3 @@
-*.so
-*.o
-*-actual
-*.swo
-*.swp
+/build/install/*
+/build/output/*
 *.deb
-test-binary
