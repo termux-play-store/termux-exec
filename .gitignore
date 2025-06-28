@@ -5,6 +5,8 @@
 *.swp
 *.deb
 test-binary
+tests/execl
+tests/exec-directory
 tests/fexecve
 tests/popen
 tests/system-uname

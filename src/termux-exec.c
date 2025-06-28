@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <unistd.h>
 
@@ -284,9 +285,19 @@ __attribute__((visibility("default"))) int execve(const char *executable_path, c
     fprintf(stderr, LOG_PREFIX "Rewritten path: '%s'\n", executable_path);
   }
 
+  char normalized_path_buffer[PATH_MAX];
+  executable_path = normalize_path(executable_path, normalized_path_buffer);
+
   if (access(executable_path, X_OK) != 0) {
-    // Error out if the file is not executable:
-    errno = EACCES;
+    // Error out if the file is not executable.
+    struct stat stat_buffer;
+    if (stat(executable_path, &stat_buffer) == 0) {
+      // File exists but is executable:
+      errno = EACCES;
+    } else {
+      // File does not exist:
+      errno = ENOENT;
+    }
     return -1;
   }
 
@@ -315,6 +326,13 @@ __attribute__((visibility("default"))) int execve(const char *executable_path, c
   // We use one more byte since inspect_file_header() will null terminate the buffer.
   char header[256];
   ssize_t read_bytes = read(fd, header, sizeof(header) - 1);
+  if (read_bytes < 0) {
+    if (errno == EISDIR) {
+      // execve() should error with EACCES if file is directory.
+      errno = EACCES;
+    }
+    return -1;
+  }
   close(fd);
 
   struct file_header_info info = {
@@ -337,9 +355,6 @@ __attribute__((visibility("default"))) int execve(const char *executable_path, c
       fprintf(stderr, LOG_PREFIX "Path to interpreter from shebang: '%s'\n", info.interpreter);
     }
   }
-
-  char normalized_path_buffer[PATH_MAX];
-  executable_path = normalize_path(executable_path, normalized_path_buffer);
 
   char **new_allocated_envp = NULL;
   char *termux_self_exe = NULL;

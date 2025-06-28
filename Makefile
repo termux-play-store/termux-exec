@@ -1,6 +1,6 @@
 CC ?= clang
 TERMUX_BASE_DIR ?= /data/data/com.termux/files
-CFLAGS += -Wall -Wextra -Werror -Wshadow -fvisibility=hidden -std=c17
+CFLAGS += -Wall -Wextra -Werror -Wshadow -fvisibility=hidden -std=c23
 C_SOURCE := src/termux-exec.c src/exec-variants.c src/termux-readlink.c
 CLANG_FORMAT := clang-format --sort-includes --style="{ColumnLimit: 120}" $(C_SOURCE) tests/fexecve.c tests/system-uname.c tests/print-argv0.c tests/popen.c
 CLANG_TIDY ?= clang-tidy
@@ -17,6 +17,12 @@ endif
 
 libtermux-exec.so: $(C_SOURCE)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(C_SOURCE) -DTERMUX_PREFIX=\"$(TERMUX_PREFIX)\" -DTERMUX_BASE_DIR=\"$(TERMUX_BASE_DIR)\" -shared -fPIC -o libtermux-exec.so
+
+tests/execl: tests/execl.c
+	$(CC) $(CFLAGS) -DTERMUX_BASE_DIR=\"$(TERMUX_BASE_DIR)\" $< -o $@
+
+tests/exec-directory: tests/exec-directory.c
+	$(CC) $(CFLAGS) -DTERMUX_BASE_DIR=\"$(TERMUX_BASE_DIR)\" $< -o $@
 
 tests/fexecve: tests/fexecve.c
 	$(CC) $(CFLAGS) -DTERMUX_BASE_DIR=\"$(TERMUX_BASE_DIR)\" $< -o $@
@@ -46,7 +52,7 @@ on-device-tests:
 	make clean
 	ASAN_OPTIONS=symbolize=0,detect_leaks=0 make on-device-tests-internal
 
-on-device-tests-internal: libtermux-exec.so tests/fexecve tests/popen tests/system-uname tests/readlink-proc-self-exe $(TERMUX_BASE_DIR)/usr/bin/termux-exec-test-print-argv0
+on-device-tests-internal: libtermux-exec.so tests/execl tests/exec-directory tests/fexecve tests/popen tests/system-uname tests/readlink-proc-self-exe $(TERMUX_BASE_DIR)/usr/bin/termux-exec-test-print-argv0
 	@LD_PRELOAD=${CURDIR}/libtermux-exec.so ./run-tests.sh
 
 format:
