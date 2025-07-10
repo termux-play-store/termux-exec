@@ -25,7 +25,7 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
       - run: make unit-test CC=clang HOST_BUILD=1
-      - run: make on-normal-linux-tests
+      - run: make on-normal-linux-tests CC=clang
 
   actionlint:
     runs-on: ubuntu-latest
