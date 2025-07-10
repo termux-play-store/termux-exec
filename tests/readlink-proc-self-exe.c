@@ -1,4 +1,6 @@
 #define _DEFAULT_SOURCE
+#define __USE_XOPEN2K8
+#include <fcntl.h>
 #include <linux/limits.h>
 #include <stdio.h>
 #include <string.h>

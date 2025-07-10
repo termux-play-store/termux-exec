@@ -1,5 +1,6 @@
 #include <fcntl.h>
 #include <stdio.h>
+#define __USE_XOPEN2K8
 #include <unistd.h>
 
 int main() {

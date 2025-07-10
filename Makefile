@@ -1,9 +1,10 @@
 CC ?= clang
 TERMUX_BASE_DIR ?= /data/data/com.termux/files
-CFLAGS += -Wall -Wextra -Werror -Wshadow -fvisibility=hidden -std=c23
+CFLAGS += -Wall -Wextra -Werror -Wshadow -fvisibility=hidden -std=c23 -D__USE_GNU
 C_SOURCE := src/termux-exec.c src/exec-variants.c src/termux-readlink.c
 CLANG_FORMAT := clang-format --sort-includes --style="{ColumnLimit: 120}" $(C_SOURCE) tests/fexecve.c tests/system-uname.c tests/print-argv0.c tests/popen.c
 CLANG_TIDY ?= clang-tidy
+TEST_BINARIES = tests/execl tests/exec-directory tests/fexecve tests/popen tests/system-uname tests/readlink-proc-self-exe $(TERMUX_BASE_DIR)/usr/bin/termux-exec-test-print-argv0
 
 ifeq ($(SANITIZE),1)
   CFLAGS += -O1 -g -fsanitize=address -fno-omit-frame-pointer
@@ -37,10 +38,11 @@ tests/readlink-proc-self-exe: tests/readlink-proc-self-exe.c
 	$(CC) $(CFLAGS) -DTERMUX_BASE_DIR=\"$(TERMUX_BASE_DIR)\" $< -o $@
 
 $(TERMUX_BASE_DIR)/usr/bin/termux-exec-test-print-argv0: tests/print-argv0.c
+	mkdir -p $(TERMUX_BASE_DIR)/usr/bin/
 	$(CC) $(CFLAGS) $< -o $@
 
 clean:
-	rm -f libtermux-exec.so tests/*-actual test-binary $(TERMUX_BASE_DIR)/usr/bin/termux-exec-test-print-argv0
+	rm -f libtermux-exec.so tests/*-actual $(TEST_BINARIES)
 
 install: libtermux-exec.so
 	install libtermux-exec.so $(DESTDIR)$(PREFIX)/lib/libtermux-exec.so
@@ -52,8 +54,11 @@ on-device-tests:
 	make clean
 	ASAN_OPTIONS=symbolize=0,detect_leaks=0 make on-device-tests-internal
 
-on-device-tests-internal: libtermux-exec.so tests/execl tests/exec-directory tests/fexecve tests/popen tests/system-uname tests/readlink-proc-self-exe $(TERMUX_BASE_DIR)/usr/bin/termux-exec-test-print-argv0
+on-device-tests-internal: libtermux-exec.so $(TEST_BINARIES)
 	@LD_PRELOAD=${CURDIR}/libtermux-exec.so ./run-tests.sh
+
+on-normal-linux-tests: $(TEST_BINARIES)
+	./run-tests.sh
 
 format:
 	$(CLANG_FORMAT) -i $(C_SOURCE) tests/*.c

@@ -2,7 +2,16 @@
 
 set -u
 
+UNAME_OS=$(uname -o)
+
 for f in tests/*.sh; do
+	if [ "$UNAME_OS" != Android ]; then
+					if [ "$f" = tests/call-system-bin-sh.sh ] || [ "$f" = tests/print-argv0.sh ]; then
+									echo "Skipping $f..."
+									continue
+					fi
+	fi
+
 	printf "Running $f..."
 
 	EXPECTED_FILE=$f-expected
