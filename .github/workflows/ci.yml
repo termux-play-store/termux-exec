@@ -29,8 +29,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Homebrew/actions/setup-homebrew@master
-      - run: brew install clang-format
       - run: make unit-test CC=clang HOST_BUILD=1
       - run: make on-normal-linux-tests CC=clang HOST_BUILD=1
 
