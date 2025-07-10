@@ -24,6 +24,13 @@ jobs:
       - run: make check CLANG_TIDY="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang-tidy --extra-arg=--target=aarch64-linux-android29"
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+
+  host-build-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Homebrew/actions/setup-homebrew@master
+      - run: brew install clang
       - run: make unit-test CC=clang HOST_BUILD=1
       - run: make on-normal-linux-tests CC=clang HOST_BUILD=1
 
