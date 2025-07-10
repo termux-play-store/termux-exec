@@ -3,6 +3,7 @@
 set -u
 
 UNAME_OS=$(uname -o)
+EXIT_CODE=0
 
 for f in tests/*.sh; do
 	if [ "$UNAME_OS" != Android ]; then
@@ -24,6 +25,8 @@ for f in tests/*.sh; do
 		printf " OK\n"
 	else
 		printf " FAILED - compare expected $EXPECTED_FILE with ${ACTUAL_FILE}\n"
+		EXIT_CODE=1
 	fi
 done
 
+exit $EXIT_CODE
