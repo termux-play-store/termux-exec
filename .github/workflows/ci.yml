@@ -15,7 +15,7 @@ jobs:
       - uses: nttld/setup-ndk@v1
         id: setup-ndk
         with:
-          ndk-version: r26d
+          ndk-version: r28c
           link-to-sdk: true
       - run: brew install clang-format
       - run: make CC="${ANDROID_NDK_HOME}"/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang
