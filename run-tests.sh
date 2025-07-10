@@ -24,7 +24,12 @@ for f in tests/*.sh; do
 	if cmp --silent $ACTUAL_FILE $EXPECTED_FILE; then
 		printf " OK\n"
 	else
-		printf " FAILED - compare expected $EXPECTED_FILE with ${ACTUAL_FILE}\n"
+		printf " FAILED - compare expected ${EXPECTED_FILE} with ${ACTUAL_FILE}\n"
+		echo "### Expected:"
+		cat "$EXPECTED_FILE"
+		echo "### Actual:"
+		cat "$ACTUAL_FILE"
+		echo "###"
 		EXIT_CODE=1
 	fi
 done
