@@ -187,6 +187,7 @@ struct file_header_info {
   bool is_elf;
   // If executing a 32-bit binary on a 64-bit host:
   bool is_non_native_elf;
+  bool is_statically_linked;
   char interpreter_buf[256];
   char const *interpreter;
   char const *interpreter_arg;
@@ -196,6 +197,10 @@ static void inspect_file_header(char *header, size_t header_len, struct file_hea
   if (header_len >= 20 && !memcmp(header, ELFMAG, SELFMAG)) {
     result->is_elf = true;
     Elf32_Ehdr *ehdr = (Elf32_Ehdr *)header;
+    if (ehdr->e_type == ET_EXEC) {
+      result->is_statically_linked = true;
+      result->interpreter = TERMUX_BIN_PATH "termux-elf-loader";
+    }
     if (ehdr->e_machine != EM_NATIVE) {
       result->is_non_native_elf = true;
     }
@@ -372,7 +377,7 @@ __attribute__((visibility("default"))) int execve(const char *executable_path, c
   // Avoid interfering with Android /system software by removing
   // LD_PRELOAD and LD_LIBRARY_PATH from env if executing something
   // there.
-  if (!setup_env(envp, &new_allocated_envp, wrap_in_linker ? orig_executable_path : NULL, &termux_self_exe)) {
+  if (!setup_env(envp, &new_allocated_envp, (wrap_in_linker && !info.is_statically_linked) ? orig_executable_path : NULL, &termux_self_exe)) {
     if (new_allocated_envp) {
       free(new_allocated_envp);
     }
